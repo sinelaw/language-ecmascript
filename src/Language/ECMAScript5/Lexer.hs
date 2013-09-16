@@ -92,10 +92,10 @@ insideMultiLineComment = noAsterisk <|> try asteriskInComment
 
 --7.6
 identifier :: PosParser Expression
-identifier = withPos $ VarRef def <$> identifierName
+identifier = withPos $ lexeme $ VarRef def <$> (flip butNot reservedWord $ identifierName)
 
 identifierName :: PosParser Id
-identifierName = withPos $ lexeme $ flip butNot reservedWord $ fmap (Id def) $
+identifierName = withPos $ lexeme $ fmap (Id def) $
                  (:)
                  <$> identifierStart
                  <*> many identifierPart
