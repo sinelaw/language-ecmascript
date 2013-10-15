@@ -553,13 +553,12 @@ tryStatement =
             <$  kcatch
             <*> inParens identifierName
             <*> block
-    finally :: PosParser Statement
-    finally = withPos $
-              kfinally *>
+    finally :: Parser [Positioned Statement]
+    finally = kfinally *>
               block
 
-block :: PosParser Statement
-block = withPos $ BlockStmt def <$> inBraces statementList
+block :: Parser [Positioned Statement]
+block = inBraces statementList
 
 debuggerStatement :: PosParser Statement
 debuggerStatement =

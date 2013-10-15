@@ -173,7 +173,7 @@ data CaseClause a = CaseClause a (Expression a) [Statement a]
   deriving (Show,Data,Typeable,Eq,Ord,Functor,Foldable,Traversable)
 
 -- | Catch clause, spec 12.14
-data CatchClause a = CatchClause a (Id a) (Statement a) 
+data CatchClause a = CatchClause a (Id a) [Statement a]
                      -- ^ @catch (x) {...}@
   deriving (Show,Data,Typeable,Eq,Ord,Functor,Foldable,Traversable)
 
@@ -217,8 +217,8 @@ data Statement a
               (Statement a)          -- body 
     -- ^ @ForStmt a init test increment body@, @for (init; test,
     -- increment) body@, spec 12.6
-  | TryStmt a (Statement a) {-body-} (Maybe (CatchClause a))
-      (Maybe (Statement a)) {-finally-}
+  | TryStmt a [Statement a] {-body-} (Maybe (CatchClause a))
+      (Maybe [Statement a]) {-finally-}
     -- ^ @try stmt catch(x) stmt finally stmt@, spec 12.14
   | ThrowStmt a (Expression a)
     -- ^ @throw expr;@, spec 12.13

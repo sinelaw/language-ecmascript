@@ -102,14 +102,14 @@ ppStatement s = case s of
             semi <+> maybe (ppExpression True) test) $$ 
     ppStatement body
   TryStmt _ stmt mcatch mfinally ->
-    text "try" $$ inBlock stmt $$ ppCatch $$ ppFinally 
+    text "try" $$ asBlock stmt $$ ppCatch $$ ppFinally 
     where ppFinally = case mfinally of
             Nothing -> empty
-            Just stmt -> text "finally" <> inBlock stmt
+            Just stmt -> text "finally" <> asBlock stmt
           ppCatch = case mcatch of
             Nothing -> empty
             Just (CatchClause _ id s) -> 
-              text "catch" <+> (parens.ppId) id <+> inBlock s
+              text "catch" <+> (parens.ppId) id <+> asBlock s
   ThrowStmt _ e -> text "throw" <+> ppExpression True e <> semi
   WithStmt _ e s -> text "with" <+> parens (ppExpression True e) $$ ppStatement s
   VarDeclStmt _ decls ->
