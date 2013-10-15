@@ -121,6 +121,7 @@ instance HasAnnotation Statement where
     WithStmt a _ _       -> a
     VarDeclStmt a _      -> a
     FunctionStmt a _ _ _ -> a
+    DebuggerStmt a       -> a
   setAnnotation a s = case s of
     BlockStmt _ ss       -> BlockStmt a ss
     EmptyStmt _          -> EmptyStmt a
@@ -139,18 +140,9 @@ instance HasAnnotation Statement where
     ReturnStmt _ e       -> ReturnStmt a e
     WithStmt _ o b       -> WithStmt a o b
     VarDeclStmt _ vds    -> VarDeclStmt a vds
-    FunctionStmt _ n as b-> FunctionStmt a n as b    
+    FunctionStmt _ n as b-> FunctionStmt a n as b
+    DebuggerStmt _       -> DebuggerStmt a
     
--- instance HasAnnotation LValue where
---   getAnnotation lv = case lv of
---     LVar a _ -> a
---     LDot a _ _ -> a
---     LBracket a _ _ -> a
---   setAnnotation a lv = case lv of
---     LVar _ n -> LVar a n
---     LDot _ o f -> LDot a o f
---     LBracket a o fe -> LBracket a o fe    
-  
 instance HasAnnotation VarDecl where
   getAnnotation (VarDecl a _ _) = a
   setAnnotation a (VarDecl _ vn e) = VarDecl a vn e  
