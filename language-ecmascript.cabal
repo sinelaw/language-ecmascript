@@ -17,7 +17,7 @@ Category:       Language
 Build-Type:     Simple
 Synopsis:       JavaScript parser and pretty-printer library
 Description:
-  Tools for working with ECMAScript 3 (popularly known as JavaScript).
+  Tools for working with ECMAScript 5 (popularly known as JavaScript).
   Includes a parser, pretty-printer, a simple quasi-quoter and tools
   for working with source tree annotations and an arbitrary
   instance. Analyses have migrated to package
