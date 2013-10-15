@@ -32,8 +32,8 @@ import Data.Default.Class
 import Data.Default.Instances.Base
 
 import Data.Char
-import Data.Maybe (fromMaybe)
-import Numeric(readDec,readOct,readHex)
+import Data.Maybe (fromMaybe, isNothing)
+import Numeric(readDec,readOct,readHex,readFloat)
 
 import Control.Monad.Identity
 import Control.Applicative ((<$>), (<*), (*>), (<*>), (<$))
@@ -264,84 +264,64 @@ booleanLiteral = withPos $ BoolLit def
 
 --7.8.3
 numericLiteral :: PosParser Expression
-numericLiteral = hexIntegerLiteral <|> decimalLiteral
+numericLiteral = withPos $ lexeme $ NumLit def <$> parseNumber
 
--- Creates a decimal value from a whole, fractional and exponent parts.
-mkDecimal :: Integer -> Integer -> Integer -> Integer -> Double
-mkDecimal whole frac fracLen exp =
-  ((fromInteger whole) + ((fromInteger frac) * (10 ^^ (-fracLen)))) * (10 ^^ exp)
+parseNumber:: Parser (Either Int32 Double) 
+parseNumber = hexNumber <|> decimalNumber
 
--- Creates an integer value from a whole and exponent parts.
-mkInteger :: Integer -> Integer -> Int
-mkInteger whole exp = fromInteger $ whole * (10 ^ exp)
+hexNumber :: Parser (Either Int32 Double)
+hexNumber = do s <- hexIntLit
+               Left <$> wrapReadS Numeric.readHex s
 
-decimalLiteral :: PosParser Expression
-decimalLiteral = withPos $ lexeme $
-  (do whole <- decimalInteger
-      mfraclen <- optionMaybe (pdot >> decimalDigitsWithLength)
-      mexp  <- optionMaybe exponentPart
-      if (mfraclen == Nothing && mexp == Nothing)
-        then return $ NumLit def $ Left $ fromInteger whole
-        else let (frac, flen) = fromMaybe (0, 0) mfraclen
-                 exp          = fromMaybe 0 mexp
-             in  return $ NumLit def $ Right $ mkDecimal whole frac flen exp)
-  <|>
-  (do (frac, flen) <- pdot >> decimalDigitsWithLength
-      exp <- option 0 exponentPart
-      return $ NumLit def $ Right $ mkDecimal 0 frac flen exp)
+hexIntLit :: Parser String
+hexIntLit = do try (char '0' >> oneOf "xX")
+               many1 hexDigit
 
-decimalDigitsWithLength :: Parser (Integer, Integer)
-decimalDigitsWithLength = do digits <- many decimalDigit
-                             return $ digits2NumberAndLength digits
+decimalNumber :: Parser (Either Int32 Double)
+decimalNumber = do (s, i) <- decLit
+                   if i then Left <$> wrapReadS readDec s
+                        else Right <$> wrapReadS readFloat s
 
-digits2NumberAndLength :: [Integer] -> (Integer, Integer)
-digits2NumberAndLength is =
-  let (_, n, l) = foldr (\d (pow, acc, len) -> (pow*10, acc + d*pow, len+1))
-                        (1, 0, 0) is
-  in (n, l)
+-- | returns (s, True) if the number is an integer, an (s, False)
+-- otherwise
+decLit :: Parser (String, Bool)
+decLit =
+  let marr (Just ar) = ar
+      marr Nothing = []
+  in choice [do whole <- decIntLit
+                mfrac <- optionMaybe ((:) <$> char '.' <*> decDigitsOpt)
+                mexp  <- optionMaybe exponentPart
+                let isint = isNothing mfrac && isNothing mexp
+                return (whole ++ marr mfrac ++ marr mexp, isint)
+            ,do frac <- (:) <$> (char '.') <*> decDigits
+                exp <- option "" exponentPart
+                return ('0':frac++exp, True)             
+            ]                          
 
-decimalIntegerLiteral :: PosParser Expression
-decimalIntegerLiteral = withPos $ lexeme $ decimalInteger >>=
-                        \i -> return $ NumLit def $ Left $ fromInteger i
+decIntLit :: Parser String
+decIntLit = digit >>= \d -> case d of
+  '0' -> return [d]
+  _   -> (d:) <$> decDigitsOpt
 
-decimalInteger :: Parser Integer
-decimalInteger = (char '0' >> return 0)
-              <|>(do d  <- nonZeroDecimalDigit
-                     ds <- many decimalDigit
-                     return $ fst $ digits2NumberAndLength (d:ds))
+wrapReadS :: (Monad m) => ReadS a -> String -> m a
+wrapReadS r s = case r s of
+  [(a, "")] -> return a
+  _         -> fail "Bad parse: could not convert a string to a Haskell value"
 
--- the spec says that decimalDigits should be intead of decimalIntegerLiteral, but that seems like an error
-signedInteger :: Parser Integer
-signedInteger = (char '+' >> decimalInteger) <|>
-                (char '-' >> negate <$> decimalInteger) <|>
-                decimalInteger
+fromHex :: String -> Parser Int
+fromHex = wrapReadS readHex
 
-decimalDigit :: Parser Integer
-decimalDigit  = do c <- decimalDigitChar
-                   return $ toInteger $ ord c - ord '0'
+decDigitsOpt :: Parser String
+decDigitsOpt = many digit
 
-decimalDigitChar :: Parser Char
-decimalDigitChar = rangeChar '0' '9'
+decDigits :: Parser String
+decDigits = many1 digit
 
-nonZeroDecimalDigit :: Parser Integer
-nonZeroDecimalDigit  = do c <- rangeChar '1' '9'
-                          return $ toInteger $ ord c - ord '0'
-
---hexDigit = ParsecChar.hexDigit
-
-exponentPart :: Parser Integer
-exponentPart = (char 'e' <|> char 'E') >> signedInteger
-
-fromHex :: String -> Int32
-fromHex = fst . head . Numeric.readHex
-
-fromDecimal :: String -> Float
-fromDecimal = fst . head . Numeric.readDec
-
-hexIntegerLiteral :: PosParser Expression
-hexIntegerLiteral = withPos $ lexeme $ do
-  try (char '0' >> oneOf ['x', 'X'])
-  NumLit def . Left . fromHex <$> many1 hexDigit
+exponentPart :: Parser String
+exponentPart = do ei <- oneOf "eE"
+                  sgn<- option "" $ oneOf "+-" >>= \x -> return [x]
+                  si <- decDigits
+                  return (ei:(sgn++si))
 
 --7.8.4
 dblquote :: Parser Char
@@ -385,7 +365,7 @@ lineContinuation = backslash >> lineTerminatorSequence >> return ""
 
 escapeSequence :: Parser Char
 escapeSequence = characterEscapeSequence
-              <|>(char '0' >> notFollowedBy decimalDigitChar >> return cNUL)
+              <|>(char '0' >> notFollowedBy digit >> return cNUL)
               <|>hexEscapeSequence
               <|>unicodeEscapeSequence
 
@@ -403,18 +383,17 @@ nonEscapeCharacter = anyChar `butNot` (forget escapeCharacter <|> lineTerminator
 
 escapeCharacter :: Parser Char
 escapeCharacter = singleEscapeCharacter
-               <|>decimalDigitChar
+               <|>digit
                <|>char 'x'
                <|>char 'u'
 
 hexEscapeSequence :: Parser Char
-hexEscapeSequence =  chr . int32toInt . fromHex <$> (char 'x' *> count 2 hexDigit)
-
-int32toInt :: Int32 -> Int
-int32toInt = fromIntegral . toInteger
+hexEscapeSequence =  (char 'x' *> count 2 hexDigit) >>=
+                     fromHex >>= return . chr
 
 unicodeEscapeSequence :: Parser Char
-unicodeEscapeSequence = chr . int32toInt . fromHex <$> (char 'u' *> count 4 hexDigit)
+unicodeEscapeSequence = (char 'u' *> count 4 hexDigit) >>=
+                        fromHex >>= return . chr
 
 --7.8.5 and 15.10.4.1
 regularExpressionLiteral :: PosParser Expression
