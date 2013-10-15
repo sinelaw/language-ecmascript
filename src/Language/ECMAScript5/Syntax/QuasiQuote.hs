@@ -3,6 +3,7 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE Rank2Types #-}
 module Language.ECMAScript5.Syntax.QuasiQuote (js, jsexpr, jsstmt) where
 
 import qualified Language.Haskell.TH as TH
@@ -14,6 +15,8 @@ import Data.Data (Data)
 import Language.ECMAScript5.Syntax
 import Language.ECMAScript5.Parser
 import Language.ECMAScript5.ParserState
+
+import Unsafe.Coerce
 
 jsexpr :: QuasiQuoter
 jsexpr = QuasiQuoter {quoteExp = quoteJSExpr}
@@ -47,7 +50,10 @@ quoteCommon p s = do loc <- TH.location
                                       return $ TH.UnboxedTupE []
                        Right x  -> dataToExpQ (const Nothing) x
 
+coerce :: Stream s Identity Char => ParsecT s ParserState Identity (Positioned a) -> PosParser a
+coerce = unsafeCoerce
+
 parseString :: forall a s. (s ~ String) => ParsecT s ParserState Identity (Positioned a)
             -> String
             -> Either ParseError (a ParserAnnotation)
-parseString p s = parse p "" s
+parseString p s = parse (coerce p) "" s
