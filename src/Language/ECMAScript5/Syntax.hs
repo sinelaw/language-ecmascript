@@ -18,6 +18,7 @@ module Language.ECMAScript5.Syntax (Program(..)
                                    ,Prop(..)
                                    ,UnaryAssignOp(..)
                                    ,PropAssign(..)
+                                   ,Number
                                    ) where
 
 import Text.Parsec.Pos(initialPos,SourcePos) -- used by data JavaScript

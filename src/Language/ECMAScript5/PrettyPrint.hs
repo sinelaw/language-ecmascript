@@ -1,9 +1,10 @@
 {-# LANGUAGE FlexibleInstances, UndecidableInstances #-}
 
 -- |Pretty-printing JavaScript.
-module Language.ECMAScript5.PrettyPrint (Pretty (..)) where
+module Language.ECMAScript5.PrettyPrint (Pretty (..)
+                                        ,unsafeInExprStmt) where
 
-import Text.PrettyPrint.HughesPJ
+import Text.PrettyPrint.Leijen hiding (Pretty)
 import Language.ECMAScript5.Syntax
 import Prelude hiding (maybe)
 
@@ -25,108 +26,152 @@ instance Pretty (Expression a) where
 instance Pretty (Statement a) where
   prettyPrint = ppStatement
 
--- | Renders a list of statements as a 'String'
-renderStatements :: [Statement a] -> String
-renderStatements = render . stmtList
+instance Pretty (CatchClause a) where
+  prettyPrint (CatchClause _ id ss) =
+    text "catch" <+> (parens.prettyPrint) id <+> asBlock ss
+    
+instance Pretty (ForInit a) where 
+  prettyPrint t = case t of
+    NoInit     -> empty
+    VarInit vs -> text "var" <+> cat (punctuate comma $ map (ppVarDecl False) vs)
+    ExprInit e -> ppExpression False e
 
--- | Renders a list of statements as a 'String'
-renderExpression :: Expression a -> String
-renderExpression = render . (ppExpression True)
+instance Pretty (ForInInit a) where
+  prettyPrint t = case t of
+    ForInVar vd   -> text "var" <+> ppVarDecl False vd
+    ForInExpr exp -> ppExpression False exp
+    
+instance Pretty (VarDecl a) where
+  prettyPrint = ppVarDecl True
+
+instance Pretty (CaseClause a) where
+  prettyPrint (CaseClause _ e ss) =
+    text "case" <+> ppExpression True e <> colon </> nestBlock (prettyPrint ss)
+  prettyPrint (CaseDefault _ ss) = text "default:" </> nestBlock (prettyPrint ss)
+  
+instance Pretty InfixOp where
+  prettyPrint = infixOp
+
+instance Pretty AssignOp where
+  prettyPrint = assignOp
+
+instance Pretty PrefixOp where
+  prettyPrint = prefixOp
+
+instance Pretty (Prop a) where
+  prettyPrint p = case p of
+    PropId a id -> prettyPrint (Id a id)
+    PropString _ str -> ppString str
+    PropNum _ n -> prettyPrint n
+
+instance Pretty Number where
+  prettyPrint = let p :: (Show a) => a -> Doc
+                    p = text . show in either p p
+
+instance Pretty (Id a) where
+  prettyPrint (Id _ str) = text str
 
 -- Displays the statement in { ... }, unless it is a block itself.
 inBlock:: Statement a -> Doc
-inBlock s@(BlockStmt _ _) = ppStatement s
+inBlock s@(BlockStmt _ _) = prettyPrint s
 inBlock s                 = asBlock [s]
 
 asBlock :: [Statement a] -> Doc
-asBlock ss = lbrace $+$ nest 2 (stmtList ss) $$ rbrace
+asBlock [] = lbrace <$$> rbrace
+asBlock ss = lbrace <> line <> (indentBlock $ prettyPrint ss) <$$> rbrace
 
-ppId (Id _ str) = text str
+indentBlock :: Doc -> Doc
+indentBlock = indent indentation
 
-forInit :: ForInit a -> Doc
-forInit t = case t of
-  NoInit     -> empty
-  VarInit vs -> text "var" <+> cat (punctuate comma $ map (ppVarDecl False) vs)
-  ExprInit e -> ppExpression False e
+indentation = 3
 
-forInInit :: ForInInit a -> Doc  
-forInInit t = case t of
-  ForInVar vd   -> text "var" <+> ppVarDecl False vd
-  ForInExpr exp -> ppExpression False exp
+nestBlock :: Doc -> Doc
+nestBlock = nest indentation
 
-caseClause :: CaseClause a -> Doc
-caseClause (CaseClause _ e ss) =
-  text "case" $+$ ppExpression True e <+> colon $$ nest 2 (stmtList ss)
-caseClause (CaseDefault _ ss) =
-  text "default:" $$ nest 2 (stmtList ss)
+ppString = dquotes . text . jsEscape
+
+
 
 ppVarDecl :: Bool -> VarDecl a -> Doc
 ppVarDecl hasIn vd = case vd of
-  VarDecl _ id Nothing  -> ppId id
-  VarDecl _ id (Just e) -> ppId id <+> equals <+> ppAssignmentExpression hasIn e
+  VarDecl _ id Nothing  -> prettyPrint id
+  VarDecl _ id (Just e) -> prettyPrint id <+> equals <+> ppAssignmentExpression hasIn e
 
 ppStatement :: Statement a -> Doc
 ppStatement s = case s of
   BlockStmt _ ss -> asBlock ss
   EmptyStmt _ -> semi
-  ExprStmt _ e@(CallExpr _ (FuncExpr {}) _ ) -> 
-    parens (ppExpression True e) <> semi
-  ExprStmt _ e -> ppExpression True e <> semi
+  ExprStmt _ e | unsafeInExprStmt (e) -> parens (ppExpression True e) <> semi
+  ExprStmt _ e | otherwise            -> ppExpression True e <> semi
   IfStmt _ test cons (EmptyStmt _) -> text "if" <+> 
-                                      parens (ppExpression True test) $$ 
-                                      ppStatement cons
-  IfStmt _ test cons alt -> text "if" <+> parens (ppExpression True test) $$ 
-                            ppStatement cons $$ text "else" <+> ppStatement alt
+                                      parens (ppExpression True test) </> 
+                                      (nestBlock $ prettyPrint cons)
+  IfStmt _ test cons alt -> text "if" <+> parens (ppExpression True test) </> 
+                            (nestBlock $ prettyPrint cons) </> text "else"
+                            <+> (nestBlock $ prettyPrint alt)
   SwitchStmt _ e cases ->
-    text "switch" <+> parens (ppExpression True e) $$ 
-    braces (nest 2 (vcat (map caseClause cases)))
-  WhileStmt _ test body -> text "while" <+> parens (ppExpression True test) $$
-                           ppStatement body
+    text "switch" <+> parens (ppExpression True e) <$> lbrace <> line <>
+    nestBlock (vcat (map prettyPrint cases)) <> line <> rbrace
+  WhileStmt _ test body -> text "while" <+> parens (ppExpression True test) </>
+                           nestBlock (prettyPrint body)
   ReturnStmt _ Nothing -> text "return"
   ReturnStmt _ (Just e) -> text "return" <+> ppExpression True e
   DoWhileStmt _ s e -> 
-    text "do" $$ 
-    (ppStatement s <+> text "while" <+> parens (ppExpression True e) <> semi)
+    text "do" </> prettyPrint s </> text "while" <+> parens (ppExpression True e) <> semi
   BreakStmt _ Nothing ->  text "break" <> semi
-  BreakStmt _ (Just label) -> text "break" <+> ppId label <> semi
+  BreakStmt _ (Just label) -> text "break" <+> prettyPrint label <> semi
   ContinueStmt _ Nothing -> text "continue" <> semi
-  ContinueStmt _ (Just label) -> text"continue" <+> ppId label <> semi
-  LabelledStmt _ label s -> ppId label <> colon $$ ppStatement s
-  ForInStmt p init e body -> 
+  ContinueStmt _ (Just label) -> text "continue" <+> prettyPrint label <> semi
+  LabelledStmt _ label s -> prettyPrint label <> colon <+> prettyPrint s
+  ForInStmt p init e body ->
     text "for" <+> 
-    parens (forInInit init <+> text "in" <+> ppExpression True e) $+$ 
-    ppStatement body
+    parens (prettyPrint init <+> text "in" <+> ppExpression True e) </> 
+    prettyPrint body
   ForStmt _ init incr test body ->
     text "for" <+> 
-    parens (forInit init <> semi <+> maybe (ppExpression True) incr <> 
-            semi <+> maybe (ppExpression True) test) $$ 
-    ppStatement body
-  TryStmt _ stmt mcatch mfinally ->
-    text "try" $$ asBlock stmt $$ ppCatch $$ ppFinally 
+    parens (prettyPrint init <> semi <>
+            maybe (\e -> space <> ppExpression True e) incr <> 
+            semi <> maybe (\e -> space <> ppExpression True e) test) </> 
+    prettyPrint body
+  TryStmt _ stmts mcatch mfinally ->
+    text "try" </> asBlock stmts </> ppCatch </> ppFinally 
     where ppFinally = case mfinally of
             Nothing -> empty
-            Just stmt -> text "finally" <> asBlock stmt
+            Just stmts -> text "finally" <> asBlock stmts
           ppCatch = case mcatch of
             Nothing -> empty
-            Just (CatchClause _ id s) -> 
-              text "catch" <+> (parens.ppId) id <+> asBlock s
+            Just cc -> prettyPrint cc    
   ThrowStmt _ e -> text "throw" <+> ppExpression True e <> semi
-  WithStmt _ e s -> text "with" <+> parens (ppExpression True e) $$ ppStatement s
+  WithStmt _ e s -> text "with" <+> parens (ppExpression True e) </> prettyPrint s
   VarDeclStmt _ decls ->
     text "var" <+> cat (punctuate comma (map (ppVarDecl True) decls)) <> semi
   FunctionStmt _ name args body ->
-    text "function" <+> ppId name <> 
-    parens (cat $ punctuate comma (map ppId args)) $$ 
-    asBlock body
+    text "function" <+> prettyPrint name <> 
+    parens (cat $ punctuate comma (map prettyPrint args)) <+>
+    asBlock body    
+  DebuggerStmt _ -> text "debugger" <> semi
 
-stmtList :: [Statement a] -> Doc
-stmtList = vcat . map ppStatement
-
-ppProp :: Prop a -> Doc
-ppProp p = case p of
-  PropId a id -> ppId (Id a id)
-  PropString _ str -> doubleQuotes (text (jsEscape str))
-  PropNum _ n -> text (show n)
+-- | A predicate to tell if the expression --when pretty-printed--
+-- will begin with "function" or '{' and be thus unsafe to use in an
+-- expression statement without wrapping it in '()'.
+unsafeInExprStmt :: Expression a -> Bool
+-- property: forall e. unsafeInExprStmt(e) <==> prettyPrint(e) begins
+-- with "function" or '{'
+unsafeInExprStmt = unsafeInExprStmt_ 15
+  where unsafeInExprStmt_ prec e =
+          case e of
+            ObjectLit {} -> True
+            DotRef _ obj _ | prec >= 1 -> unsafeInExprStmt_ 1 obj
+            BracketRef _ obj _ | prec > 0 -> unsafeInExprStmt_ 1 obj
+            UnaryAssignExpr a op lv | (op `elem` [PostfixInc, PostfixDec])
+                                      && (prec > 3) -> unsafeInExprStmt_ 2 lv
+            InfixExpr _ _ l _ | prec >= 5  -> unsafeInExprStmt_ 5 l
+            CondExpr _ c _ _ | prec >= 12 -> unsafeInExprStmt_ 12 c
+            AssignExpr _ _ lv _ | prec >= 13 -> unsafeInExprStmt_ 2 lv
+            CommaExpr _ (e:_) | prec >= 14 -> unsafeInExprStmt_ 14 e
+            CallExpr _ e _ | prec >= 2 -> unsafeInExprStmt_ 2 e
+            FuncExpr {} -> True
+            _ -> False
 
 infixOp op = text $ case op of
   OpMul -> "*"
@@ -199,49 +244,53 @@ jsEscape (ch:chs) = sel ch ++ jsEscape chs where
 ppPrimaryExpression :: Expression a -> Doc
 ppPrimaryExpression e = case e of
   ThisRef _ -> text "this"
-  VarRef _ id -> ppId id
+  VarRef _ id -> prettyPrint id
   NullLit _ -> text "null"
   BoolLit _ True -> text "true"
   BoolLit _ False -> text "false"
   NumLit  _ (Left i) -> text (show i)
   NumLit  _ (Right d) -> text (show d)
 --  IntLit _ n ->  text (show n)
-  StringLit _ str -> doubleQuotes (text (jsEscape str))
+  StringLit _ str -> dquotes (text (jsEscape str))
   RegexpLit _ reg g i m -> text "/" <> (text (jsEscape reg)) <> text "/" <> 
                           (if g then text "g" else empty) <> 
                           (if i then text "i" else empty) <>
                           (if m then text "m" else empty)
   ArrayLit _ es -> 
     brackets $ cat $ punctuate comma (map ppArrayElement es)
-  ObjectLit _ pas -> braces $ hsep $ punctuate comma (map ppPropAssign pas)
+  ObjectLit _ pas -> encloseSep lbrace rbrace comma $ map prettyPrint pas
   _ -> parens $ ppExpression True e
 
 ppArrayElement = maybe (ppAssignmentExpression True)
 
-ppPropAssign :: PropAssign a -> Doc
-ppPropAssign pa = case pa of
-  PExpr _ p e       -> ppProp p <> colon <+> ppAssignmentExpression True e
-  PGet  _ p body    -> ppProp p <> parens empty <+> asBlock body
-  PSet  _ p id body -> ppProp p <> parens (ppId id) <+> asBlock body
+instance Pretty (PropAssign a) where
+  prettyPrint pa = case pa of
+    PExpr _ p e       -> prettyPrint p <> colon <+> ppAssignmentExpression True e
+    PGet  _ p body    -> text "get" <+> prettyPrint p <> parens empty <+> asBlock body
+    PSet  _ p id body -> text "set" <+> prettyPrint p <> parens (prettyPrint id) <+> asBlock body
 
 -- 11.2
 ppMemberExpression :: Expression a -> Doc
 ppMemberExpression e = case e of
-  FuncExpr _ name params body -> 
-    text "function" <+> maybe ppId name <+>
-    parens (cat $ punctuate comma (map ppId params)) $$ 
-    asBlock body
-  DotRef _ obj id -> ppMemberExpression obj <> text "." <> ppId id
+  FuncExpr _ name params body ->
+    text "function" <+> maybe (\n -> prettyPrint n <> space) name <>
+    parens (cat $ punctuate comma (map prettyPrint params)) <+>
+    asBlock body    
+  DotRef _ obj id -> ppObjInDotRef obj ppMemberExpression <> text "." <> prettyPrint id
   BracketRef _ obj key -> 
     ppMemberExpression obj <> brackets (ppExpression True key)  
   NewExpr _ ctor args -> 
     text "new" <+> ppMemberExpression ctor <> ppArguments args
   _ -> ppPrimaryExpression e
 
+ppObjInDotRef :: Expression a -> (Expression a -> Doc) -> Doc
+ppObjInDotRef i@(NumLit _ _) _ = parens (ppPrimaryExpression i)
+ppObjInDotRef e p              = p e
+
 ppCallExpression :: Expression a -> Doc
 ppCallExpression e = case e of
   CallExpr _ f args -> ppCallExpression f <> ppArguments args
-  DotRef _ obj id -> ppCallExpression obj <> text "." <> ppId id
+  DotRef _ obj id -> ppObjInDotRef obj ppCallExpression <> text "." <> prettyPrint id
   BracketRef _ obj key ->ppCallExpression obj <> brackets (ppExpression True key)
   _ -> ppMemberExpression e  
     
