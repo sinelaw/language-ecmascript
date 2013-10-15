@@ -91,8 +91,9 @@ insideMultiLineComment = noAsterisk <|> try asteriskInComment
     (:) <$> char '*' <*> (stringify (noneOf "/*") <|> "" <$ lookAhead (char '*') )
 
 --7.6
-identifier :: PosParser Expression
-identifier = withPos $ lexeme $ VarRef def <$> (flip butNot reservedWord $ identifierName)
+identifier :: PosParser Id
+identifier = withPos $ lexeme $ flip butNot reservedWord $ identifierName
+
 
 identifierName :: PosParser Id
 identifierName = withPos $ lexeme $ fmap (Id def) $

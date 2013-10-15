@@ -61,7 +61,7 @@ autoSemi = psemi <|> hadNewLine <|> lookAhead prbrace <|> eof
 -- primary expressions
 primaryExpression :: PosParser Expression
 primaryExpression = choice [ withPos $ ThisRef def <$ kthis
-                           , identifier
+                           , withPos $ VarRef def <$> identifier
                            , literal
                            , arrayLiteral
                            , objectLiteral
@@ -97,7 +97,7 @@ propertyAssignment = withPos $
                          return $ PGet def pname body)
                   <|>(do try (sset <* notFollowedBy pcolon)
                          pname <- propertyName
-                         param <- inParens identifierName
+                         param <- inParens identifier
                          body <- inBraces functionBody
                          return $ PSet def pname param body)
                   <|>(do pname <- propertyName
@@ -138,7 +138,7 @@ functionExpression :: PosParser Expression
 functionExpression = withPos $
   FuncExpr def
   <$  kfunction
-  <*> optionMaybe identifierName
+  <*> optionMaybe identifier
   <*> inParens formalParameterList
   <*> withFreshEnclosing (inBraces functionBody)
 
@@ -292,13 +292,13 @@ functionDeclaration :: PosParser Statement
 functionDeclaration = withPos $
   FunctionStmt def
   <$  kfunction
-  <*> identifierName
+  <*> identifier
   <*> inParens formalParameterList
   <*> withFreshEnclosing (inBraces functionBody)
 
 formalParameterList :: Parser [Positioned Id]
 formalParameterList =
-  identifierName `sepBy` pcomma
+  identifier `sepBy` pcomma
 
 parseStatement :: PosParser Statement
 parseStatement =
@@ -341,7 +341,7 @@ variableDeclarationList =
 
 variableDeclaration :: PosParser VarDecl
 variableDeclaration =
-  withPos $ VarDecl def <$> identifierName <*> optionMaybe initializer
+  withPos $ VarDecl def <$> identifier <*> optionMaybe initializer
 
 initializer :: PosParser Expression
 initializer =
@@ -353,7 +353,7 @@ variableDeclarationListNoIn =
 
 variableDeclarationNoIn :: PosParser VarDecl
 variableDeclarationNoIn =
-  withPos $ VarDecl def <$> identifierName  <*> optionMaybe initalizerNoIn
+  withPos $ VarDecl def <$> identifier <*> optionMaybe initalizerNoIn
 
 initalizerNoIn :: PosParser Expression
 initalizerNoIn =
@@ -458,7 +458,7 @@ validatedRestricted keyword constructor null parser =
 
 continueStatement :: PosParser Statement
 continueStatement =
-   validatedRestricted kcontinue constructValidate (return Nothing) (optionMaybe identifierName)
+   validatedRestricted kcontinue constructValidate (return Nothing) (optionMaybe identifier)
  where
    constructValidate a mlab = do 
      encIter <- filter isIter <$> getEnclosing
@@ -472,7 +472,7 @@ continueStatement =
 
 breakStatement :: PosParser Statement
 breakStatement = 
-    validatedRestricted kbreak constructValidate (return Nothing) (optionMaybe identifierName)
+    validatedRestricted kbreak constructValidate (return Nothing) (optionMaybe identifier)
   where
     constructValidate a mlab = do
       enc <- getEnclosing
@@ -505,7 +505,7 @@ labelledStatement :: PosParser Statement
 labelledStatement =
   withPos $
   LabelledStmt def
-  <$> try (identifierName <* pcolon >>= pushLabel)
+  <$> try (identifier <* pcolon >>= pushLabel)
   <*> parseStatement
   <*  clearLabelSet
 
@@ -551,7 +551,7 @@ tryStatement =
     catch = withPos $
             CatchClause def
             <$  kcatch
-            <*> inParens identifierName
+            <*> inParens identifier
             <*> block
     finally :: Parser [Positioned Statement]
     finally = kfinally *>
