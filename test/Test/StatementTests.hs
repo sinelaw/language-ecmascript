@@ -228,8 +228,24 @@ unitTests runTest =
   $: testCase "Function statement in a while-loop body (regression from QuickCheck tests)" $$
        runTest "while-func-stmt"
        [ReturnStmt () Nothing,WhileStmt () (NumLit () $ Left 0) (FunctionStmt () (Id () "n") [] [])]
+  $: testCase "Non-reference left-hand-sides can be parsed" $$
+       runTest "non-ref-lhs"
+       [ExprStmt () $ AssignExpr () OpAssign (StringLit () "foo") (NumLit () $ Left 1)
+       ,ExprStmt () $ AssignExpr () OpAssignAdd (InfixExpr () OpAdd (VarRef () $ Id () "a") (VarRef () $ Id () "b")) (InfixExpr () OpMul (NumLit () $ Left 4) (VarRef () $ Id () "c"))]
+  $: testCase "Expressions prohibited by the grammar to occur as targets of assignments (LeftHandSideExpression restriction)" $$
+       expectedParseFail "bad-lhs" (1, 9)
+  $: testCase "Number parsing" $$
+       runTest "numbers"
+       (map (ExprStmt () . NumLit ())
+        [Left 42
+        ,Left 9000
+        ,Right 2.718281828 
+        ,Right 0.09878
+        ])
+  $: testCase "A do-while loop with 'with' and 'return' statement in a function (QuickCheck regression)" $$
+       runTest "func-while-with-return"
+       [FunctionStmt () (Id () "f") [] [DoWhileStmt () (WithStmt () (NumLit () $ Left 0) (ReturnStmt () $ Just $ VarRef () $ Id () "P")) (NullLit())]]
   $: []
-
 
 commentTest =
   testCase "line comments" $$
@@ -240,4 +256,4 @@ jQuery = testCase "jQuery doesn't fail to parse" $$
          ableToParse "jquery"
 
 run = defaultMain tests_ecmascript5_parser
-runa = defaultMain tests_ecmascript5_parser_with_autosemi 
+runa = defaultMain tests_ecmascript5_parser_with_autosemi

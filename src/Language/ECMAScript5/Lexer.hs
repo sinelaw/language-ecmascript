@@ -288,14 +288,14 @@ decLit :: Parser (String, Bool)
 decLit =
   let marr (Just ar) = ar
       marr Nothing = []
-  in choice [do whole <- decIntLit
+  in choice [do frac <- (:) <$> (char '.') <*> decDigits
+                exp <- option "" exponentPart
+                return ('0':frac++exp, True)             
+            ,do whole <- decIntLit
                 mfrac <- optionMaybe ((:) <$> char '.' <*> decDigitsOpt)
                 mexp  <- optionMaybe exponentPart
                 let isint = isNothing mfrac && isNothing mexp
                 return (whole ++ marr mfrac ++ marr mexp, isint)
-            ,do frac <- (:) <$> (char '.') <*> decDigits
-                exp <- option "" exponentPart
-                return ('0':frac++exp, True)             
             ]                          
 
 decIntLit :: Parser String
