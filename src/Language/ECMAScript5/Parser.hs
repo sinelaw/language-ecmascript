@@ -116,7 +116,7 @@ propertyName = withPos $
            
 bracketed, dotref, called :: Parser (Positioned Expression -> Positioned Expression)
 bracketed = postfixWithPos $ flip (BracketRef def) <$> inBrackets expression
-dotref    = postfixWithPos $ flip (DotRef def)     <$  pdot <*> identifierName
+dotref    = postfixWithPos $ flip (DotRef def)     <$> try (pdot *> identifierName)
 called    = postfixWithPos $ flip (CallExpr def)   <$> arguments
 
 newExpression :: PosParser Expression

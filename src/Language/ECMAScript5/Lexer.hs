@@ -290,7 +290,7 @@ decLit =
       marr Nothing = []
   in choice [do frac <- (:) <$> (char '.') <*> decDigits
                 exp <- option "" exponentPart
-                return ('0':frac++exp, True)             
+                return ('0':frac++exp, False)
             ,do whole <- decIntLit
                 mfrac <- optionMaybe ((:) <$> char '.' <*> decDigitsOpt)
                 mexp  <- optionMaybe exponentPart
