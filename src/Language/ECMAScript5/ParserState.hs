@@ -258,7 +258,7 @@ pushLabel ident = do ps <- getState
                      let labs = labelSet ps ++ concatMap getLabelSet encs
                      if lab `elem` labs 
                        then fail $ "Duplicate label at " ++ show pos 
-                       else putState (ps {labelSet = (lab:labs)}) >> return ident
+                       else putState (ps {labelSet = (lab:(labelSet ps))}) >> return ident
 
 clearLabelSet :: Parser ()
 clearLabelSet = modifyState $ modifyLabelSet (const [])
