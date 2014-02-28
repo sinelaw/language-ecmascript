@@ -80,9 +80,9 @@ data EnclosingStatement = EnclosingIter [Label]
                           -- constructor should always be non-empty
 
 instance Show EnclosingStatement where
-  show (EnclosingIter ls) = "iteration" ++ show ls
+  show (EnclosingIter ls)   = "iteration" ++ show ls
   show (EnclosingSwitch ls) = "switch" ++ show ls
-  show (EnclosingOther ls) = "statement" ++ show ls
+  show (EnclosingOther ls)  = "statement" ++ show ls
 
 isIter :: EnclosingStatement -> Bool
 isIter (EnclosingIter _) = True
