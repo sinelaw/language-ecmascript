@@ -9,6 +9,8 @@ module Language.ECMAScript5.ParserState
        , HasComments
        , Parser
        , PosParser
+       , InParser
+       , PosInParser
        , withPos
        , postfixWithPos
        , prefixWithPos
@@ -60,7 +62,8 @@ type Positioned x = x ParserAnnotation
  
 type Parser   a = forall s. Stream s Identity Char => ParsecT s ParserState Identity a 
 type InParser a =  forall s. Stream s Identity Char => ParsecT s InParserState Identity a 
-type PosParser x = Parser (Positioned x) 
+type PosParser x = Parser (Positioned x)
+type PosInParser x = InParser (Positioned x)
  
 type WhiteSpaceState = (Bool, SourcePos)
 

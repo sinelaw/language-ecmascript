@@ -45,10 +45,6 @@ import Control.Applicative ((<$>), (<*), (*>), (<*>), (<$))
 import Control.Arrow
 import Data.Maybe (fromJust, isNothing)
 
--- for parsers that have with/without in-clause variations
-type InParser a =  forall s. Stream s Identity Char => ParsecT s InParserState Identity a
-type PosInParser x = InParser (Positioned x)
-
 -- | 7.9. Automatic Semicolon Insertion algorithm, rule 1; to be used
 -- in place of `semi` in parsers for emptyStatement,
 -- variableStatement, expressionStatement, doWhileStatement,
