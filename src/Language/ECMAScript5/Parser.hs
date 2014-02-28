@@ -271,6 +271,8 @@ logicalOrExpressionGen = withPos $
 
 -- avoid putting comma expression on everything
 -- probably should be binary op in the table
+makeExpression :: Default a => [Expression a] -> Expression a
+makeExpression [] = error "Unexpected empty expression list in makeExpression"
 makeExpression [x] = x
 makeExpression xs = CommaExpr def xs
 
