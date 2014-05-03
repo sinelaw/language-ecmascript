@@ -11,6 +11,7 @@ module Language.ECMAScript5.ParserState
        , PosParser
        , InParser
        , PosInParser
+       , ParExpr
        , withPos
        , postfixWithPos
        , prefixWithPos
@@ -58,12 +59,16 @@ import Control.Monad.State (modify)
 import Data.Data (Data)
 import Data.Typeable (Typeable)
 
+
+
 type Positioned x = x ParserAnnotation 
  
 type Parser   a = forall s. Stream s Identity Char => ParsecT s ParserState Identity a 
 type InParser a =  forall s. Stream s Identity Char => ParsecT s InParserState Identity a 
 type PosParser x = Parser (Positioned x)
 type PosInParser x = InParser (Positioned x)
+
+type ExprParser = Parser (Expression ExpressionAnnotation)
  
 type WhiteSpaceState = (Bool, SourcePos)
 
@@ -120,14 +125,9 @@ instance HasLabelSet ParserState where
 type Label = String
 
 data SourceSpan =  
-  SourceSpan (SourcePos, SourcePos)
+  SourceSpan {spanBegin :: SourcePos
+             ,spanEnd :: SourcePos}
   deriving (Data, Typeable)
-
-spanBegin :: SourceSpan -> SourcePos
-spanBegin (SourceSpan (b, _)) = b
-
-spanEnd :: SourceSpan -> SourcePos
-spanEnd (SourceSpan (_, e)) = e
 
 data Comment  
   = SingleLineComment String  
@@ -145,28 +145,61 @@ instance HasWhiteSpacePos InParserState where
 
 class HasComments a where 
   getComments :: a -> [Comment] 
-  setComments :: a -> [Comment] -> a 
+  setComments :: [Comment] -> a -> a 
   modifyComments :: ([Comment] -> [Comment]) -> a -> a 
-  modifyComments f st = setComments st (f $ getComments st) 
+  modifyComments f st = setComments (f $ getComments st) st
  
 instance HasComments ParserState where 
   getComments = comments 
-  setComments st cs = st { comments = cs } 
+  setComments cs st = st { comments = cs } 
  
 instance HasComments InParserState where 
   getComments = comments . baseState 
-  setComments st cs = st { baseState = setComments (baseState st) cs } 
- 
-type ParserAnnotation = (SourceSpan, [Comment]) 
- 
+  setComments cs st = st { baseState = setComments (baseState st) cs }
+
+instance HasComments ParserAnnotation where
+  getComments (ParserAnnotation _ cmts) = cmts
+  setComments cmts (ParserAnnotation span _) = ParserAnnotation span cmts
+
+instance HasComments ExpressionAnnotation where
+  getComments = getComments . toParserAnnotation
+  setComments cmts (ExpressionAnnotation par pa) = ExpressionAnnotation par $ setComments pa cmts
+  
+data ParserAnnotation = ParserAnnotation SourceSpan [Comment]
+
+data ExpressionAnnotation = ExpressionAnnotation {parenthesized :: Parenthesized
+                                                 ,toParserAnnotation :: ParserAnnotation
+                                                 }
+
+class HasPosition x where
+  getPos :: x -> SourceSpan
+  setPos :: SourceSpan -> x -> x
+
+modifyPos :: (HasPosition x) => (SourceSpan -> SourceSpan) -> x -> x
+modifyPos f x = setPos (f $ getPos x) x
+
+instance HasPosition ParserAnnotation where
+  getPos (ParserAnnotation span _) = span
+  setPos span (ParserAnnotation _ cmt) = ParserAnnotation span cmt
+
+instance HasPosition ExpressionAnnotation where
+  getPos = getPos . toParserAnnotation
+  setPos span (ExpressionAnnotation par pa) = ExpressionAnnotation par $ setPos span pa
+
+-- | Tells if an expression was in parenthesis in the source text
+newtype Parenthesized = Parenthesized Bool
+
+instance Default Parenthesized where
+  def = Parenthesized False
+
 instance Default SourcePos where 
   def = initialPos "" 
  
 instance Default SourceSpan where 
-  def = SourceSpan def 
+  def = SourceSpan def def
  
 instance Show SourceSpan where 
-  show (SourceSpan (p1,p2)) = let 
+  show (SourceSpan p1 p2) = let 
     l1 = show $ sourceLine p1 - 1 
     c1 = show $ sourceColumn p1 - 1 
     l2 = show $ sourceLine p2 - 1 
@@ -179,28 +212,28 @@ consumeComments :: (HasComments state) => Stream s Identity Char => ParsecT s st
 consumeComments = do comments <- getComments <$> getState 
                      modifyState $ modifyComments (const []) 
                      return comments 
- 
+
 -- a convenience wrapper to take care of the position, "with
 -- position". Whenever we return something `Positioned` we need to use
 -- it.
-withPos   :: (HasAnnotation x, HasComments state, HasWhiteSpacePos state, Stream s Identity Char) 
-          => ParsecT s state Identity (Positioned x) 
-          -> ParsecT s state Identity (Positioned x) 
+withPos   :: (HasAnnotation x, HasComments state, HasWhiteSpacePos state, Stream s Identity Char, HasPosition a, HasComments a) 
+          => ParsecT s state Identity (x a)
+          -> ParsecT s state Identity (x a)
 withPos p = do start <- getPosition 
                comments <- consumeComments 
                result <- p 
-               end <- getWhiteSpaceStartPos <$> getState 
-               return $ setAnnotation (SourceSpan (start, end), comments) result 
+               end <- getWhiteSpaceStartPos <$> getState
+               return $ withAnnotation (setComments comments . setPos (SourceSpan start  end)) result 
  
-postfixWithPos :: (HasAnnotation x, HasComments state, Stream s Identity Char) => 
-                  ParsecT s state Identity (Positioned x -> Positioned x) ->  
-                  ParsecT s state Identity (Positioned x -> Positioned x) 
+postfixWithPos :: (HasAnnotation x, HasComments state, Stream s Identity Char, HasPosition a, HasComments a) => 
+                  ParsecT s state Identity (x a -> x a) ->  
+                  ParsecT s state Identity (x a -> x a)
 postfixWithPos p = do 
   f <- p 
   high <- getPosition 
   comments <- consumeComments 
-  return $ \e -> let (SourceSpan (low, _), _) = getAnnotation e  
-                 in setAnnotation (SourceSpan (low, high), comments) (f e) 
+  return $ \e -> let (SourceSpan low _) = getPos $ getAnnotation e  
+                 in withAnnotation (setPos (SourceSpan low high) . setComments comments) (f e) 
  
 prefixWithPos :: (HasAnnotation x, HasComments state, Stream s Identity Char) => 
                   ParsecT s state Identity (Positioned x -> Positioned x) ->  
@@ -209,18 +242,18 @@ prefixWithPos p = do
   low <- getPosition 
   f <- p 
   comments <- consumeComments 
-  return $ \e -> let (SourceSpan (_, high), _) = getAnnotation e  
-                 in setAnnotation (SourceSpan (low, high), comments) (f e) 
+  return $ \e -> let (SourceSpan _ high) = getPos $ getAnnotation e  
+                 in withAnnotation (setPos (SourceSpan low high) . setComments comments) (f e) 
 
-infixWithPos :: (HasAnnotation x, HasComments state, Stream s Identity Char) =>
+infixWithPos :: (HasAnnotation x, Stream s Identity Char) =>
                 ParsecT s state Identity (Positioned x -> Positioned x -> Positioned x) ->
                 ParsecT s state Identity (Positioned x -> Positioned x -> Positioned x)
 infixWithPos p = 
   liftAnnotations2 combinePos <$> p
-  where combinePos (SourceSpan (low, _), _) (SourceSpan (_, high), _) = (SourceSpan (low, high), [])
+  where combinePos an1 an2 =
+          let (SourceSpan _ high) = getPos an2
+          in modifyPos (\(SourceSpan low _) -> SourceSpan low high) an2
         liftAnnotations2 f g x y = setAnnotation (f (getAnnotation x) (getAnnotation y)) (g x y)
-
-
 
 liftIn :: Bool -> Parser a -> InParser a 
 liftIn x p = changeState (InParserState x) baseState p 
