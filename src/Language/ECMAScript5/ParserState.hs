@@ -46,7 +46,7 @@ module Language.ECMAScript5.ParserState
  
 import Text.Parsec hiding (labels) 
 import Text.Parsec.Pos (initialPos)
---import Test.Parsec.Prim
+import Text.Parsec.Prim
 import Language.ECMAScript5.Syntax 
 import Language.ECMAScript5.Syntax.Annotations 
 import Data.Default.Class 
