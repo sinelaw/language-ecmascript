@@ -5,3 +5,4 @@
 .DS_Store
 /webbits
 test-data/test262/gen
+.cabal-sandbox/
