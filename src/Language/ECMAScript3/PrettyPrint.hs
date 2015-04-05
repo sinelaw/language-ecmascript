@@ -10,7 +10,7 @@ module Language.ECMAScript3.PrettyPrint (Pretty (..)
                                         ,unsafeInExprStmt
                                         ) where
 
-import Text.PrettyPrint.Leijen hiding (Pretty)
+import Text.PrettyPrint.ANSI.Leijen hiding (Pretty)
 import Language.ECMAScript3.Syntax
 #if __GLASGOW_HASKELL__ > 708
 import Prelude hiding (maybe, id, (<$>))
