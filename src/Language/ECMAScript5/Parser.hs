@@ -109,7 +109,7 @@ propertyName = withPos $
   where id2Prop (Id a s)            = PropId a s
         string2Prop (StringLit a s) = PropString a s
         num2Prop (NumLit a i)       = PropNum a i
-           
+
 bracketed, dotref, called :: Parser (Positioned Expression -> Positioned Expression)
 bracketed = postfixWithPos $ flip (BracketRef def) <$> inBrackets expression
 dotref    = postfixWithPos $ flip (DotRef def)     <$> try (pdot *> identifierName)
@@ -149,7 +149,7 @@ assignmentExpressionGen = withPos $
         unless (validLHS l) $
           fail "Invalid left-hand-side assignment"
         AssignExpr def op l <$> assignmentExpressionGen
-        
+
 validLHS :: Expression a -> Bool
 validLHS e = case e of
   VarRef {}              -> True
@@ -178,22 +178,22 @@ assignmentExpression     = withIn   assignmentExpressionGen
 assignmentExpressionNoIn = withNoIn assignmentExpressionGen
 
 conditionalExpressionGen :: Positioned Expression -> PosInParser Expression
-conditionalExpressionGen l = 
-  CondExpr def l 
-  <$  liftIn True pquestion 
-  <*> assignmentExpressionGen 
+conditionalExpressionGen l =
+  CondExpr def l
+  <$  liftIn True pquestion
+  <*> assignmentExpressionGen
   <*  liftIn True pcolon
   <*> assignmentExpressionGen
-  
+
 type InOp s = Operator s InParserState Identity (Positioned Expression)
 
 mkOp :: Show a => Parser a -> InParser a
 mkOp p = liftIn True $ try p
 
 makeInfixExpr :: Stream s Identity Char => Parser () -> InfixOp -> InOp s
-makeInfixExpr str constr = 
-  Infix (infixWithPos $ InfixExpr def constr <$ mkOp str) AssocLeft 
-      
+makeInfixExpr str constr =
+  Infix (infixWithPos $ InfixExpr def constr <$ mkOp str) AssocLeft
+
 inExpr :: Stream s Identity Char => InOp s
 inExpr =
   Infix (infixWithPos $ InfixExpr def OpIn <$ (assertInAllowed <* mkOp kin)) AssocLeft
@@ -206,11 +206,15 @@ makePrefixExpr :: Stream s Identity Char => Parser () -> UnaryAssignOp -> InOp s
 makePrefixExpr str constr =
   Prefix $ prefixWithPos $ UnaryAssignExpr def constr <$ mkOp str
 
-makeUnaryExpr pfxs =
-  let mkPrefix :: Parser () -> PrefixOp -> InParser (Positioned Expression -> Positioned Expression)
-      mkPrefix p op = PrefixExpr def op <$ mkOp p
-  in  
-    Prefix $ makePrefix (map (prefixWithPos . uncurry mkPrefix) pfxs)
+makeUnaryExpr :: _ => [(_,  PrefixOp)] -> InOp s
+makeUnaryExpr x = undefined
+-- makeUnaryExpr pfxs =
+--   let --mkPrefix :: Parser () -> PrefixOp -> InParser (Positioned Expression -> Positioned Expression)
+--       mkPrefix :: (Stream s Identity Char) =>
+--                   Parser () -> PrefixOp -> InOp s
+--       mkPrefix p op = PrefixExpr def op <$ mkOp p
+--   in
+--     Prefix $ makePrefix (map (prefixWithPos . uncurry mkPrefix) pfxs)
 
 exprTable:: Stream s Identity Char => [[InOp s]]
 exprTable =
@@ -431,7 +435,7 @@ restricted :: (HasAnnotation e)
            =>  Parser WhiteSpaceState -> (ParserAnnotation -> a -> e ParserAnnotation) -> Parser a -> Parser a -> Parser (e ParserAnnotation)
 restricted keyword constructor null parser =
   withPos $
-  do wsSt <- keyword 
+  do wsSt <- keyword
      rest <- if fst wsSt
        then null
        else parser
@@ -445,7 +449,7 @@ validatedRestricted :: (HasAnnotation e)
                     -> Parser (e ParserAnnotation)
 validatedRestricted keyword constructor null parser =
   withPos $
-  do wsSt <- keyword 
+  do wsSt <- keyword
      rest <- if fst wsSt
        then null
        else parser
@@ -458,7 +462,7 @@ continueStatement :: PosParser Statement
 continueStatement =
    validatedRestricted kcontinue constructValidate (return Nothing) (optionMaybe identifier)
  where
-   constructValidate a mlab = do 
+   constructValidate a mlab = do
      encIter <- filter isIter <$> getEnclosing
      case mlab of
        Nothing  -> when (null encIter) $ unexpected
@@ -469,7 +473,7 @@ continueStatement =
      return $ ContinueStmt a mlab
 
 breakStatement :: PosParser Statement
-breakStatement = 
+breakStatement =
     validatedRestricted kbreak constructValidate (return Nothing) (optionMaybe identifier)
   where
     constructValidate a mlab = do

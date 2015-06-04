@@ -44,14 +44,14 @@ Library
     uniplate >= 1.6 && <1.7,
     data-default-class >= 0.0.1 && < 0.1,
     data-default-instances-base >= 0.0.1 && < 0.1,
-    QuickCheck >= 2.5 && < 2.6,
+    QuickCheck >= 2.5 && < 3,
     template-haskell,
     Diff == 0.3.*
   ghc-options:
     -fwarn-incomplete-patterns
   Exposed-Modules:
-    Language.ECMAScript3 
-    Language.ECMAScript3.Lexer 
+    Language.ECMAScript3
+    Language.ECMAScript3.Lexer
     Language.ECMAScript3.Parser
     Language.ECMAScript3.PrettyPrint
     Language.ECMAScript3.Syntax
@@ -97,7 +97,7 @@ Test-Suite test
     containers >= 0.1 && < 0.6,
     directory,
     filepath,
-    tasty == 0.3.*, 
+    tasty == 0.3.*,
     tasty-hunit == 0.2.*,
     tasty-quickcheck == 0.3.*,
     data-default-class >= 0.0.1 && < 0.1,

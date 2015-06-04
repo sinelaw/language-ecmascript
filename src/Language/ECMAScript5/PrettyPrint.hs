@@ -6,7 +6,7 @@ module Language.ECMAScript5.PrettyPrint (Pretty (..)
 
 import Text.PrettyPrint.Leijen hiding (Pretty)
 import Language.ECMAScript5.Syntax
-import Prelude hiding (maybe)
+import Prelude hiding (maybe, (<$>))
 
 -- | A class of pretty-printable ECMAScript AST nodes.
 class Pretty a where
@@ -17,10 +17,10 @@ class Pretty a where
 instance Pretty (Program a) where
   prettyPrint (Program _ ss) = prettyPrint ss
 
-instance Pretty [Statement a] where 
+instance Pretty [Statement a] where
   prettyPrint = vcat . map prettyPrint
 
-instance Pretty (Expression a) where 
+instance Pretty (Expression a) where
   prettyPrint = ppExpression True
 
 instance Pretty (Statement a) where
@@ -29,8 +29,8 @@ instance Pretty (Statement a) where
 instance Pretty (CatchClause a) where
   prettyPrint (CatchClause _ id ss) =
     text "catch" <+> (parens.prettyPrint) id <+> asBlock ss
-    
-instance Pretty (ForInit a) where 
+
+instance Pretty (ForInit a) where
   prettyPrint t = case t of
     NoInit     -> empty
     VarInit vs -> text "var" <+> cat (punctuate comma $ map (ppVarDecl False) vs)
@@ -40,7 +40,7 @@ instance Pretty (ForInInit a) where
   prettyPrint t = case t of
     ForInVar vd   -> text "var" <+> ppVarDecl False vd
     ForInExpr exp -> ppExpression False exp
-    
+
 instance Pretty (VarDecl a) where
   prettyPrint = ppVarDecl True
 
@@ -48,7 +48,7 @@ instance Pretty (CaseClause a) where
   prettyPrint (CaseClause _ e ss) =
     text "case" <+> ppExpression True e <> colon </> nestBlock (prettyPrint ss)
   prettyPrint (CaseDefault _ ss) = text "default:" </> nestBlock (prettyPrint ss)
-  
+
 instance Pretty InfixOp where
   prettyPrint = infixOp
 
@@ -103,10 +103,10 @@ ppStatement s = case s of
   EmptyStmt _ -> semi
   ExprStmt _ e | unsafeInExprStmt (e) -> parens (ppExpression True e) <> semi
   ExprStmt _ e | otherwise            -> ppExpression True e <> semi
-  IfStmt _ test cons (EmptyStmt _) -> text "if" <+> 
-                                      parens (ppExpression True test) </> 
+  IfStmt _ test cons (EmptyStmt _) -> text "if" <+>
+                                      parens (ppExpression True test) </>
                                       (nestBlock $ prettyPrint cons)
-  IfStmt _ test cons alt -> text "if" <+> parens (ppExpression True test) </> 
+  IfStmt _ test cons alt -> text "if" <+> parens (ppExpression True test) </>
                             (nestBlock $ prettyPrint cons) </> text "else"
                             <+> (nestBlock $ prettyPrint alt)
   SwitchStmt _ e cases ->
@@ -116,7 +116,7 @@ ppStatement s = case s of
                            nestBlock (prettyPrint body)
   ReturnStmt _ Nothing -> text "return"
   ReturnStmt _ (Just e) -> text "return" <+> ppExpression True e
-  DoWhileStmt _ s e -> 
+  DoWhileStmt _ s e ->
     text "do" </> prettyPrint s </> text "while" <+> parens (ppExpression True e) <> semi
   BreakStmt _ Nothing ->  text "break" <> semi
   BreakStmt _ (Just label) -> text "break" <+> prettyPrint label <> semi
@@ -124,31 +124,31 @@ ppStatement s = case s of
   ContinueStmt _ (Just label) -> text "continue" <+> prettyPrint label <> semi
   LabelledStmt _ label s -> prettyPrint label <> colon <+> prettyPrint s
   ForInStmt p init e body ->
-    text "for" <+> 
-    parens (prettyPrint init <+> text "in" <+> ppExpression True e) </> 
+    text "for" <+>
+    parens (prettyPrint init <+> text "in" <+> ppExpression True e) </>
     prettyPrint body
   ForStmt _ init incr test body ->
-    text "for" <+> 
+    text "for" <+>
     parens (prettyPrint init <> semi <>
-            maybe (\e -> space <> ppExpression True e) incr <> 
-            semi <> maybe (\e -> space <> ppExpression True e) test) </> 
+            maybe (\e -> space <> ppExpression True e) incr <>
+            semi <> maybe (\e -> space <> ppExpression True e) test) </>
     prettyPrint body
   TryStmt _ stmts mcatch mfinally ->
-    text "try" </> asBlock stmts </> ppCatch </> ppFinally 
+    text "try" </> asBlock stmts </> ppCatch </> ppFinally
     where ppFinally = case mfinally of
             Nothing -> empty
             Just stmts -> text "finally" <> asBlock stmts
           ppCatch = case mcatch of
             Nothing -> empty
-            Just cc -> prettyPrint cc    
+            Just cc -> prettyPrint cc
   ThrowStmt _ e -> text "throw" <+> ppExpression True e <> semi
   WithStmt _ e s -> text "with" <+> parens (ppExpression True e) </> prettyPrint s
   VarDeclStmt _ decls ->
     text "var" <+> cat (punctuate comma (map (ppVarDecl True) decls)) <> semi
   FunctionStmt _ name args body ->
-    text "function" <+> prettyPrint name <> 
+    text "function" <+> prettyPrint name <>
     parens (cat $ punctuate comma (map prettyPrint args)) <+>
-    asBlock body    
+    asBlock body
   DebuggerStmt _ -> text "debugger" <> semi
 
 -- | A predicate to tell if the expression --when pretty-printed--
@@ -176,8 +176,8 @@ unsafeInExprStmt = unsafeInExprStmt_ 15
 infixOp op = text $ case op of
   OpMul -> "*"
   OpDiv -> "/"
-  OpMod -> "%" 
-  OpAdd -> "+" 
+  OpMod -> "%"
+  OpAdd -> "+"
   OpSub -> "-"
   OpLShift -> "<<"
   OpSpRShift -> ">>"
@@ -252,11 +252,11 @@ ppPrimaryExpression e = case e of
   NumLit  _ (Right d) -> text (show d)
 --  IntLit _ n ->  text (show n)
   StringLit _ str -> dquotes (text (jsEscape str))
-  RegexpLit _ reg g i m -> text "/" <> (text (jsEscape reg)) <> text "/" <> 
-                          (if g then text "g" else empty) <> 
+  RegexpLit _ reg g i m -> text "/" <> (text (jsEscape reg)) <> text "/" <>
+                          (if g then text "g" else empty) <>
                           (if i then text "i" else empty) <>
                           (if m then text "m" else empty)
-  ArrayLit _ es -> 
+  ArrayLit _ es ->
     brackets $ cat $ punctuate comma (map ppArrayElement es)
   ObjectLit _ pas -> encloseSep lbrace rbrace comma $ map prettyPrint pas
   _ -> parens $ ppExpression True e
@@ -275,11 +275,11 @@ ppMemberExpression e = case e of
   FuncExpr _ name params body ->
     text "function" <+> maybe (\n -> prettyPrint n <> space) name <>
     parens (cat $ punctuate comma (map prettyPrint params)) <+>
-    asBlock body    
+    asBlock body
   DotRef _ obj id -> ppObjInDotRef obj ppMemberExpression <> text "." <> prettyPrint id
-  BracketRef _ obj key -> 
-    ppMemberExpression obj <> brackets (ppExpression True key)  
-  NewExpr _ ctor args -> 
+  BracketRef _ obj key ->
+    ppMemberExpression obj <> brackets (ppExpression True key)
+  NewExpr _ ctor args ->
     text "new" <+> ppMemberExpression ctor <> ppArguments args
   _ -> ppPrimaryExpression e
 
@@ -292,10 +292,10 @@ ppCallExpression e = case e of
   CallExpr _ f args -> ppCallExpression f <> ppArguments args
   DotRef _ obj id -> ppObjInDotRef obj ppCallExpression <> text "." <> prettyPrint id
   BracketRef _ obj key ->ppCallExpression obj <> brackets (ppExpression True key)
-  _ -> ppMemberExpression e  
-    
+  _ -> ppMemberExpression e
+
 ppArguments :: [Expression a] -> Doc
-ppArguments es = 
+ppArguments es =
   parens $ cat $ punctuate comma (map (ppAssignmentExpression True) es)
 
 ppLHSExpression :: Expression a -> Doc
@@ -307,7 +307,7 @@ ppPostfixExpression e = case e of
   UnaryAssignExpr _ PostfixInc e' -> ppLHSExpression e' <> text "++"
   UnaryAssignExpr _ PostfixDec e' -> ppLHSExpression e' <> text "--"
   _ -> ppLHSExpression e
-  
+
 -- 11.4
 ppUnaryExpression :: Expression a -> Doc
 ppUnaryExpression e = case e of
@@ -319,59 +319,59 @@ ppUnaryExpression e = case e of
 -- 11.5
 ppMultiplicativeExpression :: Expression a -> Doc
 ppMultiplicativeExpression e = case e of
-  InfixExpr _ op e1 e2 | op `elem` [OpMul, OpDiv, OpMod] -> 
+  InfixExpr _ op e1 e2 | op `elem` [OpMul, OpDiv, OpMod] ->
     ppMultiplicativeExpression e1 <+> infixOp op <+> ppUnaryExpression e2
   _ -> ppUnaryExpression e
-  
+
 -- 11.6
 ppAdditiveExpression :: Expression a -> Doc
 ppAdditiveExpression e = case e of
-  InfixExpr _ op e1 e2 | op `elem` [OpAdd, OpSub] -> 
+  InfixExpr _ op e1 e2 | op `elem` [OpAdd, OpSub] ->
     ppAdditiveExpression e1 <+> infixOp op <+> ppMultiplicativeExpression e2
   _ -> ppMultiplicativeExpression e
 
 -- 11.7
 ppShiftExpression :: Expression a -> Doc
 ppShiftExpression e = case e of
-  InfixExpr _ op e1 e2 | op `elem` [OpLShift, OpSpRShift, OpZfRShift] -> 
-    ppShiftExpression e1 <+> infixOp op <+> ppAdditiveExpression e2  
+  InfixExpr _ op e1 e2 | op `elem` [OpLShift, OpSpRShift, OpZfRShift] ->
+    ppShiftExpression e1 <+> infixOp op <+> ppAdditiveExpression e2
   _ -> ppAdditiveExpression e
 
--- 11.8.  
+-- 11.8.
 -- | @ppRelationalExpression True@ is RelationalExpression,
 -- @ppRelationalExpression False@ is RelationalExpressionNoIn
 ppRelationalExpression :: Bool -> Expression a -> Doc
-ppRelationalExpression hasIn e = 
+ppRelationalExpression hasIn e =
   let opsNoIn = [OpLT, OpGT, OpLEq, OpGEq, OpInstanceof]
       ops     = if hasIn then OpIn:opsNoIn else opsNoIn
-  in case e of    
-    InfixExpr _ op e1 e2 | op `elem` ops -> 
+  in case e of
+    InfixExpr _ op e1 e2 | op `elem` ops ->
       ppRelationalExpression hasIn e1 <+> infixOp op <+> ppShiftExpression e2
     _ -> ppShiftExpression e
-    
+
 -- 11.9
 ppEqualityExpression :: Bool -> Expression a -> Doc
 ppEqualityExpression hasIn e = case e of
   InfixExpr _ op e1 e2 | op `elem` [OpEq, OpNEq, OpStrictEq, OpStrictNEq] ->
-    ppEqualityExpression hasIn e1 <+> infixOp op <+> 
+    ppEqualityExpression hasIn e1 <+> infixOp op <+>
     ppRelationalExpression hasIn e2
   _ -> ppRelationalExpression hasIn e
-  
+
 -- 11.10
 ppBitwiseANDExpression :: Bool -> Expression a -> Doc
 ppBitwiseANDExpression hasIn e = case e of
-  InfixExpr _ op@OpBAnd e1 e2 -> ppBitwiseANDExpression hasIn e1 <+> 
+  InfixExpr _ op@OpBAnd e1 e2 -> ppBitwiseANDExpression hasIn e1 <+>
                                  infixOp op <+>
                                  ppEqualityExpression hasIn e2
   _ -> ppEqualityExpression hasIn e
-  
+
 ppBitwiseXORExpression :: Bool -> Expression a -> Doc
 ppBitwiseXORExpression hasIn e = case e of
   InfixExpr _ op@OpBXor e1 e2 -> ppBitwiseXORExpression hasIn e1 <+>
                                  infixOp op <+>
                                  ppBitwiseANDExpression hasIn e2
   _ -> ppBitwiseANDExpression hasIn e
-  
+
 ppBitwiseORExpression :: Bool -> Expression a -> Doc
 ppBitwiseORExpression hasIn e = case e of
   InfixExpr _ op@OpBOr e1 e2 -> ppBitwiseORExpression hasIn e1 <+>
@@ -385,19 +385,19 @@ ppLogicalANDExpression hasIn e = case e of
   InfixExpr _ op@OpLAnd e1 e2 -> ppLogicalANDExpression hasIn e1 <+>
                                  infixOp op <+>
                                  ppBitwiseORExpression hasIn e2
-  _ -> ppBitwiseORExpression hasIn e                                 
-                                 
+  _ -> ppBitwiseORExpression hasIn e
+
 ppLogicalORExpression :: Bool -> Expression a -> Doc
 ppLogicalORExpression hasIn e = case e of
   InfixExpr _ op@OpLOr e1 e2 -> ppLogicalORExpression hasIn e1 <+>
                                 infixOp op <+>
                                 ppLogicalANDExpression hasIn e2
   _ -> ppLogicalANDExpression hasIn e
-  
+
 -- 11.12
 ppConditionalExpression :: Bool -> Expression a -> Doc
 ppConditionalExpression hasIn e = case e of
-  CondExpr _ c et ee -> ppLogicalORExpression hasIn c <+> text "?" <+> 
+  CondExpr _ c et ee -> ppLogicalORExpression hasIn c <+> text "?" <+>
                         ppAssignmentExpression hasIn et <+> colon <+>
                         ppAssignmentExpression hasIn ee
   _ -> ppLogicalORExpression hasIn e
@@ -405,10 +405,10 @@ ppConditionalExpression hasIn e = case e of
 -- 11.13
 ppAssignmentExpression :: Bool -> Expression a -> Doc
 ppAssignmentExpression hasIn e = case e of
-  AssignExpr _ op l r -> ppExpression False l <+> assignOp op <+> 
+  AssignExpr _ op l r -> ppExpression False l <+> assignOp op <+>
                          ppAssignmentExpression hasIn r
   _ -> ppConditionalExpression hasIn e
-  
+
 -- 11.14
 ppExpression :: Bool -> Expression a -> Doc
 ppExpression hasIn e = case e of
